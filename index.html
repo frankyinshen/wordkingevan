@@ -52,6 +52,8 @@ input.wd{width:100%;max-width:340px;font-size:26px;text-align:center;padding:10p
 .tile2{min-width:40px;height:48px;line-height:48px;font-size:28px;font-weight:700;text-align:center;border:2px solid var(--b);border-radius:10px;font-family:Menlo,Consolas,monospace}
 .ch.fill{color:var(--ok)}.jb{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}
 .j{padding:18px 4px;font-size:16px;border:0;border-radius:12px;color:#fff}.j.ok{background:var(--a)}.j.no{background:var(--bad)}.j.ot{background:#c77d00}
+select{font-size:16px;padding:8px;border-radius:10px;border:1px solid var(--ln);background:var(--card);color:var(--fg);width:100%}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}.two label{font-size:12px;color:var(--mut);display:flex;flex-direction:column;gap:4px;justify-content:flex-end}
 textarea{width:100%;font-size:13px;border:1px solid var(--ln);border-radius:10px;padding:8px;background:var(--card);color:var(--fg);margin:6px 0}
 .pb{height:8px;background:var(--ln);border-radius:5px;overflow:hidden;margin:3px 0 8px}.pb i{display:block;height:100%;background:var(--a);width:0}
 .sm{font-size:13px;color:var(--mut)}
@@ -72,10 +74,9 @@ textarea{width:100%;font-size:13px;border:1px solid var(--ln);border-radius:10px
 <div class="sm">每次优先出没学过的单词，全部学完一遍后再随机复习。做错的题自动进入错题本。</div>
 <button class="chip" id="rst" style="margin-top:8px">重置进度和错题本</button></div>
 <div class="card"><b>⚙ 设置</b>
-<div class="sm" style="margin:6px 0 4px">题量（字母补全 / 词序达人 / 听音拼词 / 听释义拼词）</div>
-<div class="chips" id="cn"></div>
-<div class="chips" style="margin-top:8px"><button class="chip" id="au"></button><button class="chip" id="tst">🔊 测试发音</button></div><div class="sm" id="tsm" style="margin-top:6px"></div></div>
-<button class="tr A" data-s="ab"><b>火眼金睛 + 明辨词性</b><span>孩子自己点选项，系统自动判断：火眼金睛 10 题 → 明辨词性 10 题，每题 10 秒</span></button>
+<div class="two"><label>火眼金睛 / 明辨词性<span>每关题量</span><select id="n1"></select></label><label>字母补全 / 词序达人 / 听音拼词 / 听释义拼词<span>题量</span><select id="n2"></select></label></div>
+<div class="chips"><select id="vs" style="flex:1 1 150px;width:auto"></select><button class="chip" id="au"></button><button class="chip" id="tst">🔊 测试发音</button></div><div class="sm" id="tsm" style="margin-top:6px"></div></div>
+<button class="tr A" data-s="ab"><b>火眼金睛 + 明辨词性</b><span>孩子自己点选项，系统自动判断：先火眼金睛，再明辨词性，每题 10 秒；题量在上面设置</span></button>
 <button class="tr A" data-s="r3a"><b>字母补全（A 赛区第三关）</b><span>大人判断：孩子口头说或写在纸上，时间到显示答案，大人点 对 / 错 / 会但超时</span></button>
 <button class="tr B" data-s="r3b"><b>词序达人（B 赛区第三关）</b><span>大人判断：无任何提示，时间到显示答案，大人点 对 / 错 / 会但超时</span></button>
 <div class="card"><b>🎧 听音拼词（大人判断）</b>
@@ -128,35 +129,75 @@ const V='aeiou';
 const TOT={sp:W.filter(EL.r1).length,ps:W.filter(EL.r2).length};
 
 /* ---------- progress, settings & wrong-word book (kept in this browser) ---------- */
-const PF={n:10,auto:true,rf:'all'};
+const PF={n:10,n1:10,auto:true,rf:'all'};const NS=[5,10,20,30,50,60,100];
 const S={seen:{sp:new Set(),ps:new Set()},wrong:{}};
 try{const s=JSON.parse(localStorage.getItem('kow1')||'{}');['sp','ps'].forEach(t=>(s[t]||[]).forEach(w=>S.seen[t].add(w)));S.wrong=s.wrong||{};Object.assign(PF,s.pf||{})}catch(e){}
 const save=()=>{try{localStorage.setItem('kow1',JSON.stringify({sp:[...S.seen.sp],ps:[...S.seen.ps],wrong:S.wrong,pf:PF}))}catch(e){}};
 const G={ab:{n:'火眼金睛 + 明辨词性',ks:['r1','r2']},r3a:{n:'字母补全',ks:['r3a']},r3b:{n:'词序达人',ks:['r3b']},d:{n:'听音拼词',ks:['d1','d2']}};
 const MODE={r1:'火眼金睛',r2:'明辨词性',r3a:'字母补全',r3b:'词序达人',d1:'听音拼词',d2:'听释义拼词'};
 const WF=e=>PF.rf==='all'||(e.t||'x')===PF.rf;
-function draw(k,used,f){
+function draw(k,used,f,min=1){
   const sn=S.seen[k==='r2'?'ps':'sp'];
-  const c=W.filter(x=>EL[k](x)&&!used.has(x.w)&&(!f||f(x)));
+  const all=W.filter(x=>EL[k](x)&&(!f||f(x)));
+  let c=all.filter(x=>!used.has(x.w));if(c.length<min)c=all;
   return[...shuf(c.filter(x=>!sn.has(x.w))),...shuf(c.filter(x=>sn.has(x.w)))];
 }
 
-/* ---------- speech ---------- */
-let VOICE=null;
-function loadVoice(){try{const v=speechSynthesis.getVoices();VOICE=v.find(x=>/^en[-_]US/i.test(x.lang))||v.find(x=>/^en/i.test(x.lang))||null}catch(e){}}
-if(window.speechSynthesis){loadVoice();speechSynthesis.onvoiceschanged=loadVoice}
-function speak(t,h={}){
+/* ---------- speech: system voice + Youdao online voice (same method as the 语音拼写生词本 app) ---------- */
+const UA=navigator.userAgent;
+const DEVICE=/iPad/.test(UA)?'iPad':/iPhone/.test(UA)?'iPhone':(/Macintosh/.test(UA)&&navigator.maxTouchPoints>1)?'iPad':'other';
+let VOICE=null,CA=null,onFail=0;
+function loadVoices(){
+  let vs=[];try{vs=speechSynthesis.getVoices().filter(v=>v.lang&&v.lang.startsWith('en'))}catch(e){}
+  vs.sort((x,y)=>{const sc=v=>v.lang==='en-US'?0:v.lang==='en-GB'?1:2;return sc(x)-sc(y)||x.name.localeCompare(y.name)});
+  VOICE=null;for(const n of['Kathy','Sandy','Samantha']){const f=vs.find(v=>v.name===n&&v.lang==='en-US')||vs.find(v=>v.name===n);if(f){VOICE=f;break}}
+  if(!VOICE)VOICE=vs.find(v=>v.lang==='en-US')||vs[0]||null;
+  const sel=$('#vs');if(!sel)return;sel.innerHTML='';
+  const g1=document.createElement('optgroup');g1.label='系统音色';
+  if(DEVICE==='iPhone'||!vs.length)g1.appendChild(new Option('系统默认音色','sys:'));
+  else vs.forEach(v=>g1.appendChild(new Option(`${v.name} (${v.lang})`,'sys:'+v.name)));
+  const g2=document.createElement('optgroup');g2.label='在线音色（需联网）';
+  g2.appendChild(new Option('有道 · 美音','on:us'));g2.appendChild(new Option('有道 · 英音','on:uk'));
+  sel.appendChild(g1);sel.appendChild(g2);
+  const want=PF.tts||(VOICE&&DEVICE!=='iPhone'?'sys:'+VOICE.name:'sys:');
+  sel.value=[...sel.options].some(o=>o.value===want)?want:sel.options[0].value;
+}
+if(window.speechSynthesis)speechSynthesis.onvoiceschanged=loadVoices;
+function stopAudio(){if(CA){CA.onplaying=CA.onended=CA.onerror=null;try{CA.pause()}catch(e){}CA=null}}
+function silence(){try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}stopAudio()}
+function ttsNote(m){const a=$('#run').classList.contains('hide')?null:$('#am');(a||$('#tsm')).textContent=m}
+function speak(t,h={}){stopAudio();return(PF.tts||'').startsWith('on:')?speakOnline(t,h):speakSystem(t,h)}
+/* system voice (iPhone: do not assign a voice, as in the reference app) */
+function speakSystem(t,h={}){
   if(!window.speechSynthesis||!window.SpeechSynthesisUtterance){h.fail&&h.fail();return false}
   let began=false,done=false;
   const end=()=>{if(!done){done=true;h.end&&h.end()}},fail=()=>{if(!done){done=true;h.fail&&h.fail()}};
   try{
-    const u=new SpeechSynthesisUtterance(t);u.lang='en-US';u.rate=.85;u.volume=1;if(VOICE)u.voice=VOICE;
+    const u=new SpeechSynthesisUtterance(t);u.lang='en-US';u.rate=.9;u.volume=1;
+    if(DEVICE!=='iPhone'){const nm=(PF.tts||'').startsWith('sys:')?PF.tts.slice(4):'';
+      const v=(nm&&speechSynthesis.getVoices().find(x=>x.name===nm))||VOICE;if(v)u.voice=v}
     u.onstart=()=>{began=true;h.begin&&h.begin()};u.onend=end;u.onerror=()=>began?end():fail();
     if(speechSynthesis.speaking||speechSynthesis.pending)speechSynthesis.cancel();
     speechSynthesis.resume();speechSynthesis.speak(u);
   }catch(e){fail();return false}
   setTimeout(()=>{const p=setInterval(()=>{if(done){clearInterval(p);return}
     if(!speechSynthesis.speaking&&!speechSynthesis.pending){clearInterval(p);began?end():fail()}},400)},1500);
+  return true;
+}
+/* Youdao online voice: play() is called straight away (inside the tap) so iOS allows it;
+   on error / block / 3 s without sound it falls back to the system voice */
+function speakOnline(t,h={}){
+  try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}
+  if(onFail>=2){return speakSystem(t,h)}
+  const a=new Audio(`https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(t)}&type=${PF.tts==='on:uk'?1:2}`);
+  CA=a;a.playbackRate=.9;let began=false,done=false;
+  const back=why=>{if(done)return;done=true;onFail++;stopAudio();
+    ttsNote(why+(onFail>=2?'；后面都直接用系统音色':'，已改用系统音色'));speakSystem(t,h)};
+  a.onplaying=()=>{began=true;onFail=0;h.begin&&h.begin()};
+  a.onended=()=>{if(!done){done=true;h.end&&h.end()}};
+  a.onerror=()=>{if(!began)back('在线音色加载失败');else if(!done){done=true;h.end&&h.end()}};
+  try{const p=a.play();if(p&&p.catch)p.catch(()=>{if(!began)back('在线音色被拦截')})}catch(e){back('在线音色不可用')}
+  setTimeout(()=>{if(!began&&CA===a)back('在线音色超时')},3000);
   return true;
 }
 
@@ -189,7 +230,7 @@ const MK={
   const P=['noun','verb','adjective'];let a,t;
   if(f){a=f;t=f.p}else{t=pick(P);a=draw('r2',used,x=>x.p===t)[0]}
   used.add(a.w);
-  const ds=draw('r2',used,x=>x.p!==t).slice(0,2);ds.forEach(x=>used.add(x.w));
+  const ds=draw('r2',used,x=>x.p!==t,2).slice(0,2);ds.forEach(x=>used.add(x.w));
   const o=shuf([a,...ds]);
   return{wd:a,shown:o,reveal:o.map(info).join('　'),
    prompt:`<div class="hint">选出<span style="color:var(--a)">${PZ[t]}</span></div><div class="sub">三个单词里，哪一个符合要求？</div>`,
@@ -229,13 +270,13 @@ const MK={
 const R={r1:{n:10,t:10,name:'火眼金睛'},r2:{n:10,t:10,name:'明辨词性'},r3a:{n:10,t:15,name:'字母补全'},r3b:{n:10,t:15,name:'词序达人'},
  d1:{n:10,t:5,name:'听音拼词'},d2:{n:10,t:15,name:'听释义拼词'}};
 const ADULT=new Set(['r3a','r3b','d1','d2']);
-const cnt=s=>s.words?s.words.length:ADULT.has(s.k)?PF.n:R[s.k].n;
+const cnt=s=>s.words?s.words.length:ADULT.has(s.k)?PF.n:PF.n1;
 
 /* ---------- engine ---------- */
 let st=null,timer=null;
 function show(v){['home','run','tips','irr'].forEach(k=>$('#'+k).classList.toggle('hide',k!==v));
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===(v==='run'?'home':v)));if(v==='home')home()}
-function stop(){clearInterval(timer);try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}}
+function stop(){clearInterval(timer);silence()}
 function begin(seq,tag,rv){stop();st={seq,tag,ri:0,qi:0,sc:seq.map(()=>0),tot:0,wrong:[],tg:{},used:new Set(),rv:!!rv,hist:[]};show('run');next()}
 function next(){
   stop();const s=st.seq[st.ri],n=cnt(s);
@@ -250,22 +291,22 @@ function mount(q,redo){
   $('#bar').style.width='100%';$('#sec').textContent=r.t;
   q.body($('#body'),{locked:()=>st.locked,fin,start:()=>start(q),auto:PF.auto&&!redo});
   if(q.adult){
-    $('#ctl').innerHTML=`<button class="go g" id="pz">⏸ 暂停</button><button class="go g" id="en">${q.endLabel}</button>`;
-    $('#pz').onclick=pause;$('#en').onclick=()=>reveal(q);undoBtn();
-    if(redo)reveal(q);else if(!q.listen)start(q);
+    $('#ctl').innerHTML='<button class="go g" id="pz">⏸ 暂停</button>'+(q.listen?'':`<button class="go g" id="en">${q.endLabel}</button>`);
+    $('#pz').onclick=pause;if(!q.listen)$('#en').onclick=()=>reveal(q);undoBtn();
+    if(q.listen)jbtns();else if(redo)reveal(q);else start(q);
   }else start(q);
 }
 function run(me){
   st.t0=Date.now();clearInterval(timer);
   timer=setInterval(()=>{const left=st.rem-(Date.now()-st.t0);
     $('#bar').style.width=Math.max(left/(st.r.t*1000),0)*100+'%';$('#sec').textContent=Math.max(0,Math.ceil(left/1000));
-    if(left<=0&&st.q===me){clearInterval(timer);st.rem=0;me.adult?reveal(me,true):fin(me.get?me.get():false)}},100);
+    if(left<=0&&st.q===me){clearInterval(timer);st.rem=0;me.adult?(me.listen?timeup():reveal(me,true)):fin(me.get?me.get():false)}},100);
 }
 function start(me){
   if(!st||st.q!==me||st.started||st.locked)return;st.started=true;const o=$('#ot');if(o)o.style.display='none';run(me);
 }
 function pause(){
-  if(!st.started||st.locked)return;
+  if(!st.started||st.locked||st.rem<=0)return;
   if(st.paused){st.paused=false;$('#pz').textContent='⏸ 暂停';run(st.q)}
   else{st.paused=true;clearInterval(timer);st.rem-=Date.now()-st.t0;$('#pz').textContent='▶ 继续'}
 }
@@ -278,7 +319,7 @@ function record(res){
 }
 /* auto-judged (火眼金睛 / 明辨词性) */
 function fin(ok){
-  if(st.locked)return;st.locked=true;clearInterval(timer);try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}
+  if(st.locked)return;st.locked=true;clearInterval(timer);silence()
   const q=st.q;record(ok?'ok':'x');
   $('#sc').textContent=st.tot;const f=$('#fb');
   f.className='fb '+(ok?'ok':'no');f.textContent=ok?'✅ '+q.reveal:'❌ 正确答案：'+q.reveal;
@@ -289,13 +330,22 @@ function fin(ok){
 /* adult-judged: show answer, then the adult taps 对 / 错 / 会但超时 */
 function reveal(q,timeup){
   if(!st||st.q!==q||st.locked)return;
-  clearInterval(timer);try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}
+  clearInterval(timer);silence()
   st.locked=true;if(q.rev)q.rev();$('#ctl').innerHTML='';
   const f=$('#fb');f.className='fb';f.textContent=(timeup?'⏰ 时间到！ ':'')+'答案：'+q.reveal;
+  jbtns();
+}
+function jbtns(){
+  st.jt=Date.now();
   $('#nx').innerHTML='<div class="jb"><button class="j ok">✅ 对</button><button class="j no">❌ 错</button><button class="j ot">⏱ 会，但超时了</button></div>';
   const b=$('#nx').querySelectorAll('button');b[0].onclick=()=>judge('ok');b[1].onclick=()=>judge('x');b[2].onclick=()=>judge('o');
 }
+function timeup(){
+  clearInterval(timer);st.rem=0;$('#ctl').innerHTML='';
+  const f=$('#fb');f.className='fb';f.textContent='⏰ 时间到！请判断';
+}
 function judge(res){
+  if(Date.now()-st.jt<450)return;
   const q=st.q,s=st.seq[st.ri],key=s.k+'|'+q.wd.w;
   st.hist.push({ri:st.ri,qi:st.qi,q,key,prev:S.wrong[key]?{...S.wrong[key]}:null,sc:st.sc[st.ri],tot:st.tot,wl:st.wrong.length});
   record(res);st.qi++;next();
@@ -345,8 +395,8 @@ function imp(code){
 function home(){
   $('#p1').textContent=`${S.seen.sp.size} / ${TOT.sp}`;$('#b1').style.width=100*S.seen.sp.size/TOT.sp+'%';
   $('#p2').textContent=`${S.seen.ps.size} / ${TOT.ps}`;$('#b2').style.width=100*S.seen.ps.size/TOT.ps+'%';
-  $('#cn').innerHTML=[5,10,20].map(n=>`<button class="chip ${PF.n===n?'on':''}" data-n="${n}">${n} 题</button>`).join('');
-  document.querySelectorAll('[data-n]').forEach(b=>b.onclick=()=>{PF.n=+b.dataset.n;save();home()});
+  $('#n1').innerHTML=NS.map(n=>`<option value="${n}" ${PF.n1===n?'selected':''}>${n} 题</option>`).join('');
+  $('#n2').innerHTML=NS.map(n=>`<option value="${n}" ${PF.n===n?'selected':''}>${n} 题</option>`).join('');
   $('#au').textContent='🔊 自动播放：'+(PF.auto?'开':'关');$('#au').classList.toggle('on',PF.auto);
   $('#rf').innerHTML=[['all','全部'],['o','⏱ 仅会但超时'],['x','❌ 仅答错']].map(([k,l])=>`<button class="chip ${PF.rf===k?'on':''}" data-f="${k}">${l}</button>`).join('');
   document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{PF.rf=b.dataset.f;save();home()});
@@ -363,7 +413,10 @@ const SEQ={ab:[{k:'r1'},{k:'r2'}],r3a:[{k:'r3a'}],r3b:[{k:'r3b'}],d1:[{k:'d1'}],
 const TAG={ab:'综合练习',r3a:'A 赛区',r3b:'B 赛区',d1:'听音',d2:'听音'};
 document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>begin(SEQ[b.dataset.s],TAG[b.dataset.s]));
 $('#au').onclick=()=>{PF.auto=!PF.auto;save();home()};
-$('#tst').onclick=()=>{$('#tsm').textContent='正在朗读……听不到的话，检查静音键和音量。';speak('Hello. This is a sound test.',{fail:()=>$('#tsm').textContent='这个环境不支持朗读，请大人念单词，练习时点「仅计时」。'})};
+$('#n1').onchange=()=>{PF.n1=+$('#n1').value;save()};$('#n2').onchange=()=>{PF.n=+$('#n2').value;save()};
+$('#tst').onclick=()=>{const o=$('#vs').selectedOptions[0];$('#tsm').textContent=`正在朗读（${o?o.textContent:''}）……听不到的话，检查静音键和音量。`;
+  onFail=0;speak('Hello. This is a sound test.',{fail:()=>$('#tsm').textContent='这个环境不支持朗读，请大人念单词，练习时点「仅计时」。'})};
+$('#vs').onchange=()=>{PF.tts=$('#vs').value;onFail=0;save()};
 let rc=0;$('#rst').onclick=()=>{if(!rc){rc=1;$('#rst').textContent='再点一次确认清空';setTimeout(()=>{rc=0;$('#rst').textContent='重置进度和错题本'},3000)}else{S.seen.sp.clear();S.seen.ps.clear();S.wrong={};save();rc=0;$('#rst').textContent='重置进度和错题本';home()}};
 let DL=null;
 try{window.claude&&claude.use&&claude.use('downloads').then(d=>{if(d){DL=d;$('#dl').hidden=false}}).catch(()=>{})}catch(e){}
@@ -381,7 +434,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{stop();show(b.
 $('#quit').onclick=()=>{stop();show('home')};
 $('#tips').innerHTML=TIPS.map(([t,x])=>`<div class="card tip"><b>${t}</b>${x.map(s=>`<p>${s}</p>`).join('')}</div>`).join('');
 $('#irr').innerHTML='<p class="sub">这些词的读音和字母对应关系不完全符合自然拼读规律，需要“整词记忆”。点单词可听发音。</p>'+IRR.map(([t,l])=>`<div class="card irr"><b>${t}</b><p>${l.map(([w,n])=>`<button class="w" onclick="speak('${w.replace("'","")}')"><b>${w}</b> <i>${n}</i></button>`).join('')}</p></div>`).join('');
-home();
+loadVoices();home();
 </script>
 </body>
 </html>
