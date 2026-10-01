@@ -143,39 +143,41 @@ function draw(k,used,f,min=1){
   return[...shuf(c.filter(x=>!sn.has(x.w))),...shuf(c.filter(x=>sn.has(x.w)))];
 }
 
-/* ---------- speech: system voice + Youdao online voice (same method as the 语音拼写生词本 app) ---------- */
+/* ---------- speech：系统音色(仅Samantha) + 有道在线女声（与「语音拼写生词本」同一方法） ---------- */
 const UA=navigator.userAgent;
 const DEVICE=/iPad/.test(UA)?'iPad':/iPhone/.test(UA)?'iPhone':(/Macintosh/.test(UA)&&navigator.maxTouchPoints>1)?'iPad':'other';
 let VOICE=null,CA=null,onFail=0;
+
 function loadVoices(){
   let vs=[];try{vs=speechSynthesis.getVoices().filter(v=>v.lang&&v.lang.startsWith('en'))}catch(e){}
-  vs.sort((x,y)=>{const sc=v=>v.lang==='en-US'?0:v.lang==='en-GB'?1:2;return sc(x)-sc(y)||x.name.localeCompare(y.name)});
-  VOICE=null;for(const n of['Kathy','Sandy','Samantha']){const f=vs.find(v=>v.name===n&&v.lang==='en-US')||vs.find(v=>v.name===n);if(f){VOICE=f;break}}
-  if(!VOICE)VOICE=vs.find(v=>v.lang==='en-US')||vs[0]||null;
+  /* 系统音色：只保留 Samantha (en-US)，其余全部屏蔽；没有 Samantha 就退回系统默认 */
+  VOICE=vs.find(v=>v.lang==='en-US'&&/Samantha/i.test(v.name))||null;
   const sel=$('#vs');if(!sel)return;sel.innerHTML='';
   const g1=document.createElement('optgroup');g1.label='系统音色';
-  if(DEVICE==='iPhone'||!vs.length)g1.appendChild(new Option('系统默认音色','sys:'));
-  else vs.forEach(v=>g1.appendChild(new Option(`${v.name} (${v.lang})`,'sys:'+v.name)));
+  if(DEVICE==='iPhone'||!VOICE)g1.appendChild(new Option('系统默认音色','sys:'));
+  else g1.appendChild(new Option('Samantha (en-US)','sys:Samantha'));
   const g2=document.createElement('optgroup');g2.label='在线音色（需联网）';
-  g2.appendChild(new Option('有道 · 美音','on:us'));g2.appendChild(new Option('有道 · 英音','on:uk'));
+  g2.appendChild(new Option('有道 · 英语女声','on:yd'));   /* 只留这一个，Polly 等已删除 */
   sel.appendChild(g1);sel.appendChild(g2);
-  const want=PF.tts||(VOICE&&DEVICE!=='iPhone'?'sys:'+VOICE.name:'sys:');
-  sel.value=[...sel.options].some(o=>o.value===want)?want:sel.options[0].value;
+  const sv=PF.tts;
+  sel.value=(sv&&[...sel.options].some(o=>o.value===sv))?sv:'on:yd';
 }
 if(window.speechSynthesis)speechSynthesis.onvoiceschanged=loadVoices;
-function stopAudio(){if(CA){CA.onplaying=CA.onended=CA.onerror=null;try{CA.pause()}catch(e){}CA=null}}
+
+function stopAudio(){if(CA){CA.oncanplaythrough=CA.onplaying=CA.onended=CA.onerror=null;try{CA.pause()}catch(e){}CA=null}}
 function silence(){try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}stopAudio()}
-function ttsNote(m){const a=$('#run').classList.contains('hide')?null:$('#am');(a||$('#tsm')).textContent=m}
+function ttsNote(m){const a=$('#run').classList.contains('hide')?null:$('#am';(a||$('#tsm')).textContent=m}
+
 function speak(t,h={}){stopAudio();return(PF.tts||'').startsWith('on:')?speakOnline(t,h):speakSystem(t,h)}
+
 /* system voice (iPhone: do not assign a voice, as in the reference app) */
 function speakSystem(t,h={}){
   if(!window.speechSynthesis||!window.SpeechSynthesisUtterance){h.fail&&h.fail();return false}
   let began=false,done=false;
   const end=()=>{if(!done){done=true;h.end&&h.end()}},fail=()=>{if(!done){done=true;h.fail&&h.fail()}};
   try{
-    const u=new SpeechSynthesisUtterance(t);u.lang='en-US';u.rate=.9;u.volume=1;
-    if(DEVICE!=='iPhone'){const nm=(PF.tts||'').startsWith('sys:')?PF.tts.slice(4):'';
-      const v=(nm&&speechSynthesis.getVoices().find(x=>x.name===nm))||VOICE;if(v)u.voice=v}
+    const u=new SpeechSynthesisUtterance(String(t));u.lang='en-US';u.rate=.9;u.volume=1;
+    if(DEVICE!=='iPhone'&&VOICE)u.voice=VOICE;
     u.onstart=()=>{began=true;h.begin&&h.begin()};u.onend=end;u.onerror=()=>began?end():fail();
     if(speechSynthesis.speaking||speechSynthesis.pending)speechSynthesis.cancel();
     speechSynthesis.resume();speechSynthesis.speak(u);
@@ -184,20 +186,27 @@ function speakSystem(t,h={}){
     if(!speechSynthesis.speaking&&!speechSynthesis.pending){clearInterval(p);began?end():fail()}},400)},1500);
   return true;
 }
-/* Youdao online voice: play() is called straight away (inside the tap) so iOS allows it;
-   on error / block / 3 s without sound it falls back to the system voice */
+
+/* 有道在线女声——照搬「语音拼写生词本」验证可用的实现：
+   ① https://dict.youdao.com/dictvoice?audio=单词&type=2
+   ② new Audio(url) 直播，等 oncanplaythrough 再 play()；不用 fetch、不加 crossOrigin
+   ③ onerror 或 3 秒没加载出来(readyState<3)自动改用系统音色 */
 function speakOnline(t,h={}){
   try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}
   if(onFail>=2){return speakSystem(t,h)}
-  const a=new Audio(`https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(t)}&type=${PF.tts==='on:uk'?1:2}`);
+  ttsNote('⏳ 有道在线加载中…');
+  const a=new Audio('https://dict.youdao.com/dictvoice?audio='+encodeURIComponent(t)+'&type=2');
   CA=a;a.playbackRate=.9;let began=false,done=false;
   const back=why=>{if(done)return;done=true;onFail++;stopAudio();
     ttsNote(why+(onFail>=2?'；后面都直接用系统音色':'，已改用系统音色'));speakSystem(t,h)};
-  a.onplaying=()=>{began=true;onFail=0;h.begin&&h.begin()};
+  a.oncanplaythrough=()=>{
+    if(done)return;
+    a.play().then(()=>{began=true;onFail=0;h.begin&&h.begin();ttsNote('🔊 有道 · 英语女声')})
+           .catch(()=>{if(!began&&!done)back('⚠️ 浏览器拦截自动播放')});
+  };
   a.onended=()=>{if(!done){done=true;h.end&&h.end()}};
-  a.onerror=()=>{if(!began)back('在线音色加载失败');else if(!done){done=true;h.end&&h.end()}};
-  try{const p=a.play();if(p&&p.catch)p.catch(()=>{if(!began)back('在线音色被拦截')})}catch(e){back('在线音色不可用')}
-  setTimeout(()=>{if(!began&&CA===a)back('在线音色超时')},3000);
+  a.onerror=()=>{if(!began)back('❌ 有道在线失败');else if(!done){done=true;h.end&&h.end()}};
+  setTimeout(()=>{if(!began&&!done&&CA===a&&a.readyState<3)back('⏱ 在线加载超时')},3000);
   return true;
 }
 
@@ -242,7 +251,7 @@ const MK={
   return{wd:w,shown:[w],adult:1,endLabel:'显示答案',reveal:info(w),
    prompt:`<div class="hint">${w.c} · ${PS[w.p]}</div><div class="sub">补全缺失的 ${n} 个字母</div>`,
    body(box){bx=box;box.innerHTML='<div class="row">'+[...w.w].map((c,i)=>idx.includes(i)?'<span class="ch">_</span>':`<span class="ch">${c}</span>`).join('')+'</div>'},
-   rev(){[...bx.querySelectorAll('.ch')].forEach((e,i)=>{if(idx.includes(i)){e.textContent=w.w[i];e.classList.add('fill')}})}};
+   rev(){[...bx.querySelectorAll('.ch')].forEach((e,i)=>{if(idx.includes(i)){e.textContent=w.w[i];e.classList.add('fill')}})}}};
  },
  r3b(used,f){
   const w=f||draw('r3b',used)[0];used.add(w.w);const ch=[...w.w];
@@ -259,7 +268,7 @@ const MK={
    prompt:`<div class="hint">🎧 ${def?'听释义拼词':'听音拼词'}</div><div class="sub">孩子只听、口头拼或写在纸上，大人对照答案判断</div>`,
    body(box,ctx){
     box.innerHTML=`<div class="big">${w.w}</div><div class="sub">${PS[w.p]||''} ${w.c}</div>${def?`<div class="df">${w.d}</div>`:''}<div class="chips" style="justify-content:center"><button class="chip" id="pl">🔊 播放并计时</button><button class="chip" id="ot">⏱ 仅计时</button></div><div class="sm" id="am" style="margin-top:6px"></div>`;
-    const note=m=>{const a=$('#am');a&&(a.textContent=m)};
+    const note=m=>{const a=$('#am';a&&(a.textContent=m)};
     const hs=m=>({end:ctx.start,fail:()=>note(m)});
     $('#pl').onclick=()=>{$('#pl').textContent='🔊 再听一遍';speak(txt,hs('无法朗读：请大人念出来，再点「仅计时」'))};
     $('#ot').onclick=()=>ctx.start();
@@ -319,7 +328,7 @@ function record(res){
 }
 /* auto-judged (火眼金睛 / 明辨词性) */
 function fin(ok){
-  if(st.locked)return;st.locked=true;clearInterval(timer);silence()
+  if(st.locked)return;st.locked=true;clearInterval(timer);silence();
   const q=st.q;record(ok?'ok':'x');
   $('#sc').textContent=st.tot;const f=$('#fb');
   f.className='fb '+(ok?'ok':'no');f.textContent=ok?'✅ '+q.reveal:'❌ 正确答案：'+q.reveal;
@@ -330,7 +339,7 @@ function fin(ok){
 /* adult-judged: show answer, then the adult taps 对 / 错 / 会但超时 */
 function reveal(q,timeup){
   if(!st||st.q!==q||st.locked)return;
-  clearInterval(timer);silence()
+  clearInterval(timer);silence();
   st.locked=true;if(q.rev)q.rev();$('#ctl').innerHTML='';
   const f=$('#fb');f.className='fb';f.textContent=(timeup?'⏰ 时间到！ ':'')+'答案：'+q.reveal;
   jbtns();
@@ -412,28 +421,28 @@ function review(g){
 const SEQ={ab:[{k:'r1'},{k:'r2'}],r3a:[{k:'r3a'}],r3b:[{k:'r3b'}],d1:[{k:'d1'}],d2:[{k:'d2'}]};
 const TAG={ab:'综合练习',r3a:'A 赛区',r3b:'B 赛区',d1:'听音',d2:'听音'};
 document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>begin(SEQ[b.dataset.s],TAG[b.dataset.s]));
-$('#au').onclick=()=>{PF.auto=!PF.auto;save();home()};
-$('#n1').onchange=()=>{PF.n1=+$('#n1').value;save()};$('#n2').onchange=()=>{PF.n=+$('#n2').value;save()};
-$('#tst').onclick=()=>{const o=$('#vs').selectedOptions[0];$('#tsm').textContent=`正在朗读（${o?o.textContent:''}）……听不到的话，检查静音键和音量。`;
+ $('#au').onclick=()=>{PF.auto=!PF.auto;save();home()};
+ $('#n1').onchange=()=>{PF.n1=+$('#n1').value;save()};$('#n2').onchange=()=>{PF.n=+$('#n2').value;save()};
+ $('#tst').onclick=()=>{const o=$('#vs').selectedOptions[0];$('#tsm').textContent=`正在朗读（${o?o.textContent:''}）……听不到的话，检查静音键和音量。`;
   onFail=0;speak('Hello. This is a sound test.',{fail:()=>$('#tsm').textContent='这个环境不支持朗读，请大人念单词，练习时点「仅计时」。'})};
-$('#vs').onchange=()=>{PF.tts=$('#vs').value;onFail=0;save()};
+ $('#vs').onchange=()=>{PF.tts=$('#vs').value;onFail=0;save()};
 let rc=0;$('#rst').onclick=()=>{if(!rc){rc=1;$('#rst').textContent='再点一次确认清空';setTimeout(()=>{rc=0;$('#rst').textContent='重置进度和错题本'},3000)}else{S.seen.sp.clear();S.seen.ps.clear();S.wrong={};save();rc=0;$('#rst').textContent='重置进度和错题本';home()}};
 let DL=null;
 try{window.claude&&claude.use&&claude.use('downloads').then(d=>{if(d){DL=d;$('#dl').hidden=false}}).catch(()=>{})}catch(e){}
-$('#ex').onclick=async()=>{const c=exp();const ta=$('#code');ta.value=c;ta.select();let ok=false;
+ $('#ex').onclick=async()=>{const c=exp();const ta=$('#code');ta.value=c;ta.select();let ok=false;
   try{await navigator.clipboard.writeText(c);ok=true}catch(e){try{ok=document.execCommand('copy')}catch(e2){}}
   $('#ms').textContent=ok?'已复制，可以粘贴到微信或备忘录。':'请长按文本框，全选后复制。'};
-$('#im').onclick=()=>{try{const n=imp($('#code').value);$('#ms').textContent=`导入完成：合并了 ${n} 条错题。`;home()}catch(e){$('#ms').textContent='导入失败：码不完整或格式不对，请重新复制完整内容。'}};
-$('#dl').onclick=async()=>{try{await DL.save({filename:'单词王错题本.txt',data:exp()});$('#ms').textContent='已保存。'}catch(e){$('#ms').textContent=e&&e.code==='declined'?'已取消。':'保存失败，请改用复制。'}};
-$('#fl').onclick=()=>$('#fi').click();
-$('#fi').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('#code').value=r.result;$('#im').click()};r.readAsText(f);e.target.value=''};
-$('#vw').onclick=()=>{const el=$('#wl');if(el.innerHTML){el.innerHTML='';return}
+ $('#im').onclick=()=>{try{const n=imp($('#code').value);$('#ms').textContent=`导入完成：合并了 ${n} 条错题。`;home()}catch(e){$('#ms').textContent='导入失败：码不完整或格式不对，请重新复制完整内容。'}};
+ $('#dl').onclick=async()=>{try{await DL.save({filename:'单词王错题本.txt',data:exp()});$('#ms').textContent='已保存。'}catch(e){$('#ms').textContent=e&&e.code==='declined'?'已取消。':'保存失败，请改用复制。'}};
+ $('#fl').onclick=()=>$('#fi').click();
+ $('#fi').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('#code').value=r.result;$('#im').click()};r.readAsText(f);e.target.value=''};
+ $('#vw').onclick=()=>{const el=$('#wl';if(el.innerHTML){el.innerHTML='';return}
   const es=Object.values(S.wrong).sort((a,b)=>b.n-a.n);
   el.innerHTML=es.length?es.map(e=>{const x=BY[e.w];return`<button class="w" onclick="speak('${e.w}')"><b>${e.w}</b> <i>${x?x.c:''} · ${MODE[e.k]} · ${(e.t||'x')==='o'?'⏱超时':'❌错'}×${e.n}</i></button>`}).join(''):'<p class="sm">错题本是空的。</p>'};
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{stop();show(b.dataset.v)});
-$('#quit').onclick=()=>{stop();show('home')};
-$('#tips').innerHTML=TIPS.map(([t,x])=>`<div class="card tip"><b>${t}</b>${x.map(s=>`<p>${s}</p>`).join('')}</div>`).join('');
-$('#irr').innerHTML='<p class="sub">这些词的读音和字母对应关系不完全符合自然拼读规律，需要“整词记忆”。点单词可听发音。</p>'+IRR.map(([t,l])=>`<div class="card irr"><b>${t}</b><p>${l.map(([w,n])=>`<button class="w" onclick="speak('${w.replace("'","")}')"><b>${w}</b> <i>${n}</i></button>`).join('')}</p></div>`).join('');
+ $('#quit').onclick=()=>{stop();show('home')};
+ $('#tips').innerHTML=TIPS.map(([t,x])=>`<div class="card tip"><b>${t}</b>${x.map(s=>`<p>${s}</p>`).join('')}</div>`).join('');
+ $('#irr').innerHTML='<p class="sub">这些词的读音和字母对应关系不完全符合自然拼读规律，需要“整词记忆”。点单词可听发音。</p>'+IRR.map(([t,l])=>`<div class="card irr"><b>${t}</b><p>${l.map(([w,n])=>`<button class="w" onclick="speak('${w.replace("'","")}')"><b>${w}</b> <i>${n}</i></button>`).join('')}</p></div>`).join('');
 loadVoices();home();
 </script>
 </body>
