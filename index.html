@@ -110,6 +110,10 @@ const D=[["sightseeing","noun","观光，游览","the activity of visiting famou
 const W=D.map(([w,p,c,d])=>({w,p,c,d}));
 const BY=Object.fromEntries(W.map(x=>[x.w,x]));
 const SET=new Set(W.map(x=>x.w.toLowerCase()));
+const BAN=new Set('advise anneal baring bather beech biker billy bland bled blend blond blued breed broad bully businessmen businesswomen buss busyness buys capitol care cast cats cheep chick chile chilli chock chuck clam clip clod clop clover coarse coiling coking core cost cots dairy dash deport deportment desert dessert dial directer drag drank drove drover drunk dual expansive fat fatness fer filly fir fired fiver floor flour foal foil folly for forgot foul freed fueling fur gander gloss great greet hag hanger hat heel hem hep herd him hit hog hoot hop hubby hum hut jab jib jolly lame lane last left lest lien like limo list lively locution loft lone lost lots love lust marry massage meet meg merry meta meting mike moaning moat mop net nip nit nite not pare patrol perk perking petrel pore pork puree quite race rink rise roam rode rover rude sacred salesmen sally scarred scored see sere shoot simmer sire ski slily small some sooth sore sprang sprung stiff stomp strew string strung stuff stump suet sully tall tare tel tell tier tike till tiro toke toll tore traveller typo tyre vocation wash well will witch worm wrote'.split(' '));          /* 错误拼写候选里本身是真单词的，出题时跳过 */
+const MPS={"taste":"n","cure":"n","ache":"n","trade":"n","show":"n","repeat":"n","talk":"n","bow":"n","study":"n","bother":"n","ride":"n","drive":"n","stay":"n","smell":"n","drink":"n","harm":"n","cough":"n","shout":"n","print":"n","welcome":"na","rank":"n","practice":"n","check":"n","clap":"n","wish":"n","kiss":"n","hug":"n","work":"n","live":"a","record":"n","travel":"n","help":"n","refuse":"n","cost":"n","staff":"v","deal":"v","benefit":"v","comment":"v","document":"v","detail":"v","stamp":"v","park":"v","interest":"v","report":"v","lift":"v","tour":"v","tire":"v","toast":"v","result":"v","cast":"v","drug":"v","nap":"v","note":"v","list":"v","joke":"v","line":"v","tape":"v","fool":"v","divorce":"v","spring":"v","snow":"v","season":"v","suit":"v","pay":"v","map":"v","type":"v","train":"v","slice":"v","fish":"v","needle":"v","secret":"a","south":"a","north":"a","terminal":"a","favourite":"n","cold":"n","white":"n","junior":"n","kind":"n","blind":"nv","dry":"v","fit":"v","free":"v","plastic":"n","quiet":"n","safe":"n","professional":"n","senior":"n","average":"nv","calm":"nv","warm":"v"};                                /* 一词多性：{单词:'nva'的子集}，除 Excel 里的词性外还可以是 n名词 v动词 a形容词 */
+const XP={n:'noun',v:'verb',a:'adjective'};
+const alt=(x,t)=>(MPS[x.w]||'').includes(t[0]==='a'?'a':t[0]);
 const AL=x=>/^[a-z]+$/.test(x.w);
 const EL={
  r1:x=>x.w.length>=3,
@@ -124,7 +128,8 @@ const rnd=n=>Math.floor(Math.random()*n),pick=a=>a[rnd(a.length)];
 const shuf=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]]}return a};
 const PZ={noun:'名词 (noun)',verb:'动词 (verb)',adjective:'形容词 (adjective)'};
 const PS={noun:'n.',verb:'v.',adjective:'adj.',adverb:'adv.',preposition:'prep.'};
-const info=w=>`${w.w} · ${PS[w.p]||''} ${w.c}`;
+const pos=w=>(PS[w.p]||'')+[...(MPS[w.w]||'')].map(c=>'/'+PS[XP[c]]).join('');
+const info=w=>`${w.w} · ${pos(w)} ${w.c}`;
 const V='aeiou';
 const TOT={sp:W.filter(EL.r1).length,ps:W.filter(EL.r2).length};
 
@@ -224,17 +229,22 @@ function speakOnline(t,h={}){
   return true;
 }
 
-function miss(w){
+function cands(w){
   const L=w.length,m=new Set(),s=new Set();
   for(let i=1;i<L-1;i++)if(w[i]!==w[i+1])m.add(w.slice(0,i)+w[i+1]+w[i]+w.slice(i+2));
   for(let i=1;i<L;i++)w[i]===w[i-1]?m.add(w.slice(0,i)+w.slice(i+1)):m.add(w.slice(0,i)+w[i]+w.slice(i));
   [['ea','ee'],['ee','ea'],['ie','ei'],['ei','ie'],['ou','ow'],['ow','ou'],['ai','ay'],['oo','ou'],['ph','f'],['ck','k'],['ss','s'],['ght','t'],['tion','sion'],['le','el'],['er','or'],['or','er'],['ar','er'],['c','s'],['s','c'],['y','i'],['i','y']].forEach(([a,b])=>{const i=w.indexOf(a);if(i>0)m.add(w.slice(0,i)+b+w.slice(i+a.length))});
   for(let i=1;i<L;i++)if(V.includes(w[i]))for(const v of V)if(v!==w[i])s.add(w.slice(0,i)+v+w.slice(i+1));
-  const f=x=>shuf([...x].filter(z=>z!==w&&!SET.has(z.toLowerCase())));
+  return[m,s];
+}
+function miss(w){
+  const L=w.length,[m,s]=cands(w);
+  const ok=z=>z!==w&&!SET.has(z.toLowerCase())&&!BAN.has(z.toLowerCase());
+  const f=x=>shuf([...x].filter(ok));
   const a=f(m),b=f(s),r=[];
   if(a[0])r.push(a[0]);
   for(const z of [...b,...a.slice(1)]){if(r.length>=2)break;if(!r.includes(z))r.push(z)}
-  for(let k=0;r.length<2&&k<50;k++){const i=1+rnd(L-1),z=w.slice(0,i)+w[i]+w.slice(i);if(z!==w&&!r.includes(z)&&!SET.has(z.toLowerCase()))r.push(z)}
+  for(let k=0;r.length<2&&k<50;k++){const i=1+rnd(L-1),z=w.slice(0,i)+w[i]+w.slice(i);if(ok(z)&&!r.includes(z))r.push(z)}
   return r;
 }
 
@@ -253,7 +263,7 @@ const MK={
   const P=['noun','verb','adjective'];let a,t;
   if(f){a=f;t=f.p}else{t=pick(P);a=draw('r2',used,x=>x.p===t)[0]}
   used.add(a.w);
-  const ds=draw('r2',used,x=>x.p!==t,2).slice(0,2);ds.forEach(x=>used.add(x.w));
+  const ds=draw('r2',used,x=>x.p!==t&&!alt(x,t),2).slice(0,2);ds.forEach(x=>used.add(x.w));
   const o=shuf([a,...ds]);
   return{wd:a,shown:o,reveal:o.map(info).join('　'),
    prompt:`<div class="hint">选出<span style="color:var(--a)">${PZ[t]}</span></div><div class="sub">三个单词里，哪一个符合要求？</div>`,
