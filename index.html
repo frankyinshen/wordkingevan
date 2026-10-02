@@ -153,11 +153,11 @@ const UA=navigator.userAgent;
 const DEVICE=/iPad/.test(UA)?'iPad':/iPhone/.test(UA)?'iPhone':(/Macintosh/.test(UA)&&navigator.maxTouchPoints>1)?'iPad':'other';
 let VOICE=null,CA=null,onFail=0;
 
-/* 系统音色只用一个：Mac/iOS 用 Samantha；Windows 找本地英文女声（Zira 等），避免 Chrome 用中文音色读英文 */
+/* 系统音色只用一个：Mac/iOS 用 Samantha；Windows 优先用 Google US English（Chrome自带神经声音），其次微软 Natural，最后本地女声 */
 function pickVoice(){
   let vs=[];try{vs=speechSynthesis.getVoices().filter(v=>v.lang&&/^en/i.test(v.lang))}catch(e){}
   const us=vs.filter(v=>/^en[-_]US$/i.test(v.lang)),by=re=>us.find(v=>re.test(v.name));
-  VOICE=by(/Samantha/i)||by(/Microsoft.*(Zira|Aria|Jenny)/i)||by(/Microsoft.*(David|Mark|Guy)/i)||by(/Google US English/i)
+  VOICE=by(/Samantha/i)||by(/Google US English/i)||by(/Microsoft.*(Aria|Jenny|Zira)/i)||by(/Microsoft.*(David|Mark|Guy)/i)
       ||us.find(v=>v.localService)||us[0]||vs[0]||null;
 }
 function loadVoices(){
@@ -187,20 +187,48 @@ function speak(t,h={}){
 
 /* 系统 TTS（iPhone 不指定音色，和生词本一致）
    Windows/Chrome 优化：① 一定指定英文音色；② 保留 utterance 引用，否则 Chrome 可能回收它、onend 不触发；
-   ③ cancel() 后稍等 80ms 再 speak()，否则 Chrome 有时会吞掉这一句；④ 被取消的旧句子不当作失败 */
+   ③ cancel() 后稍等 80ms 再 speak()，否则 Chrome 有时会吞掉这一句；④ 被取消的旧句子不当作失败；
+   ⑤ 针对长句（释义等），按标点切分并加入停顿，让 Windows 老式音色有呼吸感，避免像机器人一口气读完 */
 function speakSystem(t,h={}){
   if(!window.speechSynthesis||!window.SpeechSynthesisUtterance){h.fail&&h.fail();return false}
   let began=false,done=false;
   const end=()=>{if(!done){done=true;h.end&&h.end()}},fail=()=>{if(!done){done=true;h.fail&&h.fail()}};
+  
+  // 将长句按标点切分成短句，Windows 读短句时韵律会更自然
+  const chunks = String(t).match(/[^.,;:!?]+[.,;:!?]?/g) || [String(t)];
+  
+  const playChunks = () => {
+    let idx = 0;
+    const speakNext = () => {
+      if(done) return;
+      if(idx >= chunks.length){ end(); return; }
+      const text = chunks[idx].trim();
+      if(!text){ idx++; speakNext(); return; }
+      
+      try{
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang='en-US'; u.rate=.92; u.volume=1; u.pitch=1;
+        if(DEVICE!=='iPhone'){if(!VOICE)pickVoice();if(VOICE)u.voice=VOICE}
+        
+        u.onstart=()=>{began=true;h.begin&&h.begin()};
+        u.onend=()=>{ idx++; if(idx < chunks.length) setTimeout(speakNext, 120); else end(); };
+        u.onerror=ev=>{if(ev&&(ev.error==='interrupted'||ev.error==='canceled')){done=true;return}began?end():fail()};
+        window.__utt=u;
+        speechSynthesis.speak(u);
+      }catch(e){ fail(); }
+    };
+    speakNext();
+  };
+  
   try{
-    const u=new SpeechSynthesisUtterance(String(t));u.lang='en-US';u.rate=.9;u.volume=1;
-    if(DEVICE!=='iPhone'){if(!VOICE)pickVoice();if(VOICE)u.voice=VOICE}
-    u.onstart=()=>{began=true;h.begin&&h.begin()};u.onend=end;
-    u.onerror=ev=>{if(ev&&(ev.error==='interrupted'||ev.error==='canceled')){done=true;return}began?end():fail()};
-    window.__utt=u;
-    const go=()=>{try{speechSynthesis.resume();speechSynthesis.speak(u)}catch(e){fail()}};
-    if(speechSynthesis.speaking||speechSynthesis.pending){speechSynthesis.cancel();if(DEVICE==='other')setTimeout(go,80);else go()}else go();
+    if(speechSynthesis.speaking||speechSynthesis.pending){
+      speechSynthesis.cancel();
+      if(DEVICE==='other') setTimeout(playChunks, 80); else playChunks();
+    } else {
+      playChunks();
+    }
   }catch(e){fail();return false}
+  
   setTimeout(()=>{const p=setInterval(()=>{if(done){clearInterval(p);return}
     if(!speechSynthesis.speaking&&!speechSynthesis.pending){clearInterval(p);began?end():fail()}},400)},1500);
   return true;
