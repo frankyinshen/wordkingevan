@@ -129,7 +129,7 @@ const EL={
  r3a:x=>AL(x)&&x.w.length>=4, // 放开长度上限，支持超长单词
  r3b:x=>AL(x)&&x.w.length>=4&&x.w.length<=10,
  d1:x=>x.w.length>0,
- d2:x=>!x.d.toLowerCase().includes(x.w.toLowerCase())
+ d2:x=>x.w.length>0,
 };
 const $=s=>document.querySelector(s);
 const rnd=n=>Math.floor(Math.random()*n),pick=a=>a[rnd(a.length)];
