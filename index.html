@@ -156,7 +156,7 @@ try{
   Object.values(S.wrong).forEach(e=>{if(e.s===undefined){e.s=0;e.c=e.n>0?1:0;}});
 }catch(e){}
 const save=()=>{try{localStorage.setItem('kow1',JSON.stringify({seen:S.seen,wrong:S.wrong,pf:PF}))}catch(e){}};
-const G={ab:{n:'火眼金睛 + 明辨词性',ks:['r1','r2']},r3a:{n:'字母补全',ks:['r3a']},r3b:{n:'词序达人',ks:['r3b']},d:{n:'听音拼词',ks:['d1','d2']}};
+const G={ab:{n:'火眼金睛 + 明辨词性',ks:['r1','r2']},r3a:{n:'字母补全',ks:['r3a']},r3b:{n:'词序达人',ks:['r3b']},d1:{n:'听音拼词',ks:['d1']},d2:{n:'听释义拼词',ks:['d2']}};
 const MODE={r1:'火眼金睛',r2:'明辨词性',r3a:'字母补全',r3b:'词序达人',d1:'听音拼词',d2:'听释义拼词'};
 const WF=e=>PF.rf==='all'||(e.t||'x')===PF.rf;
 function draw(k,used,f,min=1){
@@ -532,7 +532,10 @@ try{window.claude&&claude.use&&claude.use('downloads').then(d=>{if(d){DL=d;$('#d
         const fire = e.n>3?'🔥':'';
         let tag = e.s>=3?'✅掌握':(e.c>=2?'🥶生疏':'😐熟悉');
         if(e.t==='star') tag='⭐重点';
-        let clickAction = `speak('${e.w}')`;
+        // 如果是听释义拼词(d2)，点击时朗读释义(x.d)，否则朗读单词(e.w)
+        let speakText = (k==='d2' && x) ? x.d : e.w;
+        speakText = speakText.replace(/'/g, "\\'"); // 转义文本中的单引号，防止JS报错
+        let clickAction = `speak('${speakText}')`;
         if(k==='d2'){
           clickAction += `; var d=document.getElementById('det_${e.w}'); if(d){d.style.display=d.style.display==='block'?'none':'block';}`;
         }
