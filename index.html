@@ -311,7 +311,7 @@ const MK={
     };
     $('#pl').onclick=play;
     $('#ot').onclick=()=>ctx.start();
-    if(ctx.auto) play();
+     if(ctx.auto) setTimeout(play, 500); // 延迟半秒再自动播放，避免第一个单词听不清
    }};
  }
 };
