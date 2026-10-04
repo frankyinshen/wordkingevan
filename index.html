@@ -328,7 +328,7 @@ let st=null,timer=null;
 function show(v){['home','run','tips','irr','conf'].forEach(k=>$('#'+k).classList.toggle('hide',k!==v));
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===(v==='run'?'home':v)));if(v==='home')home()}
 function stop(){clearInterval(timer);silence()}
-function begin(sfunction begin(seq,tag,rv){
+function begin(seq,tag,rv){
   stop();
   st={seq,tag,ri:0,qi:0,sc:seq.map(()=>0),tot:0,wrong:[],tg:{},used:new Set(),rv:!!rv,hist:[]};
   // 预生成固定顺序的词列表，确保撤销重答不改变下一题，且能按顺序过一遍
@@ -339,7 +339,6 @@ function begin(sfunction begin(seq,tag,rv){
   });
   show('run');next()
 }
- eq,tag,rv){stop();st={seq,tag,ri:0,qi:0,sc:seq.map(()=>0),tot:0,wrong:[],tg:{},used:new Set(),rv:!!rv,hist:[]};show('run');next()}
 function next(){
   stop();const s=st.seq[st.ri],n=cnt(s);
   if(st.qi>=n)return summary(s,R[s.k],n);
