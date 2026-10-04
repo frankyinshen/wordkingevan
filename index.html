@@ -319,7 +319,7 @@ const R={r1:{n:10,t:10,name:'火眼金睛'},r2:{n:10,t:10,name:'明辨词性'},r
  d1:{n:10,t:5,name:'听音拼词'},d2:{n:10,t:15,name:'听释义拼词'}};
 const ADULT=new Set(['r3a','r3b','d1','d2']);
 const cnt=s=>{
-  // 如果是错题复习（有指定词列表），则不受题量限制，全部过一遍
+  // 只要生成了固定词列表，就全部过一遍，不受设置题量限制
   if(s.words) return s.words.length;
   return ADULT.has(s.k)?PF.n:PF.n1;
 };
