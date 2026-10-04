@@ -125,16 +125,16 @@ const alt=(x,t)=>(MPS[x.w]||'').includes(t[0]==='a'?'a':t[0]);
 const AL=x=>/^[a-z]+$/.test(x.w);
 const EL={
  r1:x=>x.w.length>=3,
- r2:x=>['noun','verb','adjective'].includes(x.p)&&x.w.length>=3,
- r3a:x=>AL(x)&&x.w.length>=4&&x.w.length<=12,
+ r2:x=>x.w.length>=3, // 放开词性限制，所有词性都可以出题
+ r3a:x=>AL(x)&&x.w.length>=4, // 放开长度上限，支持超长单词
  r3b:x=>AL(x)&&x.w.length>=4&&x.w.length<=10,
- d1:x=>AL(x)&&x.w.length>=3&&x.w.length<=12,
- d2:x=>AL(x)&&x.w.length>=3&&x.w.length<=12&&!x.d.toLowerCase().includes(x.w)
+ d1:x=>x.w.length>0,
+ d2:x=>!x.d.toLowerCase().includes(x.w.toLowerCase())
 };
 const $=s=>document.querySelector(s);
 const rnd=n=>Math.floor(Math.random()*n),pick=a=>a[rnd(a.length)];
 const shuf=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]]}return a};
-const PZ={noun:'名词 (noun)',verb:'动词 (verb)',adjective:'形容词 (adjective)'};
+const PZ={noun:'名词',verb:'动词',adjective:'形容词',adverb:'副词',preposition:'介词'};
 const PS={noun:'n.',verb:'v.',adjective:'adj.',adverb:'adv.',preposition:'prep.'};
 const pos=w=>(PS[w.p]||'')+[...(MPS[w.w]||'')].map(c=>'/'+PS[XP[c]]).join('');
 const info=w=>`${w.w} · ${pos(w)} ${w.c}`;
