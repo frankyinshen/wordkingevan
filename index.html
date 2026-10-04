@@ -127,7 +127,7 @@ const EL={
  r1:x=>x.w.length>=3,
  r2:x=>x.w.length>=3, // 放开词性限制，所有词性都可以出题
  r3a:x=>AL(x)&&x.w.length>=4, // 放开长度上限，支持超长单词
- r3b:x=>AL(x)&&x.w.length>=4&&x.w.length<=10,
+  r3b:x=>AL(x)&&x.w.length>=4,// 放开长度上限，支持超长单词
  d1:x=>x.w.length>0,
  d2:x=>x.w.length>0,
 };
