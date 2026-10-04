@@ -530,7 +530,7 @@ try{window.claude&&claude.use&&claude.use('downloads').then(d=>{if(d){DL=d;$('#d
       es.forEach(e=>{
         const x=BY[e.w];
         const fire = e.n>3?'🔥':'';
-        let tag = e.s>=3?'✅掌握':(e.c>=2?'🥶生疏':'😐熟悉');
+        let tag = e.s>=3 ? '✅掌握' : (e.n>=3 || e.c>=2 ? '🥶生疏' : '😐熟悉');
         if(e.t==='star') tag='⭐重点';
         // 如果是听释义拼词(d2)，点击时朗读释义(x.d)，否则朗读单词(e.w)
         let speakText = (k==='d2' && x) ? x.d : e.w;
